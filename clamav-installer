@@ -1,0 +1,434 @@
+#!/bin/bash
+
+# Description : ClamAV Installer
+#               Works for any Linux system with FANOTIFY configured.
+#               To check : cat /boot/config-$(uname -r) | grep FANOTIFY
+#               CONFIG_FANOTIFY=y
+#               CONFIG_FANOTIFY_ACCESS_PERMISSIONS=y
+#
+#               If displays the following, you cannot use this script.
+#               CONFIG_FANOTIFY_ACCESS_PERMISSIONS is not set
+#
+# Author      : Samiux
+# Website     : https://samiux.github.io
+# Date        : DEC 28, 2022
+# Version     : 0.1
+# License     : GPLv3 (Open Source)
+# Remarks     : This script is only for 6GB or more RAM system
+
+###------------------ CHANGE BELOW! ---------------------###
+#################################################################
+# deb or rpm
+# Change it
+# When not "deb" or "rpm", it will install DEB package by default
+#################################################################
+LINUX_PACKAGE="deb"
+
+###########################################################
+# Home directory to scan
+# DANGER : non-existent directory will cause high CPU usage
+# BUG : https://github.com/Cisco-Talos/clamav/issues/799
+# Please change it
+###########################################################
+HOME_DIR="/home/samiux/Downloads"
+
+###########################################################
+# Web root or other application directory to scan
+# DANGER : non-existent directory will cause high CPU usage
+# Change it when necessary, it can be empty
+# e.g. /var/www/html
+###########################################################
+WEBROOT_PATH=""
+
+if [[ ! -z "$WEBROOT_PATH" ]]; then
+	WEBROOT_INCLUDEPATH="OnAccessIncludePath $WEBROOT_PATH"
+fi
+###------------------ CHANGE ABOVE! ---------------------###
+
+####################################
+# Check if FANOTIFY is set in kernel
+####################################
+OUTPUT=$(cat /boot/config-$(uname -r) | grep FANOTIFY)
+
+if [[ $OUTPUT == *"is not set"* ]]; then
+        echo "$OUTPUT"
+	echo "Your kernel does not support this script!  Quit!"
+        exit 1
+fi
+
+###########################################
+# ClamAV package and version
+# Change it when newer version is available
+###########################################
+if [[ $LINUX_PACKAGE == "deb" ]]; then
+        CLAMAV_PACKAGE="clamav-1.0.0.linux.x86_64.deb"
+elif [[ $LINUX_PACKAGE == "rpm" ]]; then
+        CLAMAV_PACKAGE="clamav-1.0.0.linux.x86_64.rpm"
+else
+        CLAMAV_PACKAGE="clamav-1.0.0.linux.x86_64.deb"
+fi
+
+#####################################
+# check if root or in root directory
+#####################################
+if [ "$(id -u)" != "0" ] && [ "$(pwd)" != "/root" ]; then
+        echo "Sorry, you don't have root privileges or not in root directory to run this script."
+        exit 1
+fi
+
+# check if internet connect is available
+ping -c1 google.com 2>/dev/null 1>/dev/null
+if [ "$?" -ne 0 ]
+then
+        # for China users only
+        ping -c1 baidu.com 2>/dev/null 1>/dev/null
+        if [ "$?" -ne 0 ]
+        then
+                echo "Sorry, you cannot access internet."
+                exit 1
+        fi
+fi
+
+##########################################################
+# Stop and disable all ClamAV services before installation
+##########################################################
+if [ -f /lib/systemd/system/clamav-freshclam.service ]; then
+	sudo systemctl stop clamav-freshclam.service
+	sudo systemctl disable clamav-freshclam.service
+	sudo systemctl unmask clamav-freshclam.service
+	sudo systemctl stop clamav-daemon.service
+	sudo systemctl disable clamav-daemon.service
+	sudo systemctl unmask clamav-daemon.service
+	sudo systemctl stop clamav-clamonacc.service
+	sudo systemctl disable clamav-clamonacc.service
+	sudo systemctl unmask clamav-clamonacc.service
+	if [[ $LINUX_PACKAGE == "deb" ]]; then
+		sudo dpkg -r clamav
+	else
+		sudo rpm -e clamav
+	fi
+fi
+
+######################
+# Download and install
+######################
+wget https://www.clamav.net/downloads/production/$CLAMAV_PACKAGE
+if [[ $LINUX_PACKAGE == "deb" ]]; then
+	sudo dpkg -i $CLAMAV_PACKAGE
+else
+	sudo rpm -i $CLAMAV_PACKAGE
+fi
+sudo rm $CLAMAV_PACKAGE
+
+#######################
+# Create freshclam.conf
+#######################
+if [ -f /usr/local/etc/freshclam.conf ]; then
+	sudo mv /usr/local/etc/freshclam.conf /usr/local/etc/freshclam.conf-backup
+fi
+sudo touch /usr/local/etc/freshclam.conf
+sudo cat >>/usr/local/etc/freshclam.conf <<END
+DatabaseOwner clamav
+UpdateLogFile /var/log/clamav/freshclam.log
+LogVerbose false
+LogSyslog false
+LogFacility LOG_LOCAL6
+LogFileMaxSize 0
+LogRotate true
+LogTime true
+Foreground false
+Debug false
+MaxAttempts 5
+DatabaseDirectory /var/lib/clamav
+DNSDatabaseInfo current.cvd.clamav.net
+ConnectTimeout 30
+ReceiveTimeout 0
+TestDatabases yes
+ScriptedUpdates yes
+CompressLocalDatabase no
+Bytecode true
+NotifyClamd /usr/local/etc/clamd.conf
+# Check for new database 24 times a day
+Checks 24
+DatabaseMirror db.local.clamav.net
+DatabaseMirror database.clamav.net
+# Unofficial signatures
+# You may comment out them if you do not need them
+# PHP Malware
+# https://malware.expert/howto/extending-clamav-signatures-with-rfxn-database-for-php-malwares/
+# Croissants and Taro will block the following signatures, so please comment out them
+# Useful for PHP websites
+#DatabaseCustomURL http://www.rfxn.com/downloads/rfxn.ndb
+#DatabaseCustomURL http://www.rfxn.com/downloads/rfxn.hdb
+#DatabaseCustomURL http://www.rfxn.com/downloads/rfxn.yara
+# Unofficial Signatures
+# https://wiki.gentoo.org/wiki/ClamAV_Unofficial_Signatures
+DatabaseCustomURL https://mirror.rollernet.us/sanesecurity/badmacro.ndb
+DatabaseCustomURL https://mirror.rollernet.us/sanesecurity/blurl.ndb
+DatabaseCustomURL https://mirror.rollernet.us/sanesecurity/junk.ndb
+DatabaseCustomURL https://mirror.rollernet.us/sanesecurity/jurlbl.ndb
+DatabaseCustomURL https://mirror.rollernet.us/sanesecurity/jurlbla.ndb
+DatabaseCustomURL https://mirror.rollernet.us/sanesecurity/lott.ndb
+END
+
+###################
+# Create clamd.conf
+###################
+if [ -f /usr/local/etc/clamd.conf ]; then
+        sudo mv /usr/local/etc/clamd.conf /usr/local/etc/clamd.conf-backup
+fi
+sudo touch /usr/local/etc/clamd.conf
+sudo cat >>/usr/local/etc/clamd.conf <<END
+LocalSocket /var/run/clamav/clamd.sock
+FixStaleSocket true
+LocalSocketGroup clamav
+LocalSocketMode 666
+# TemporaryDirectory is not set to its default /tmp here to make overriding
+# the default with environment variables TMPDIR/TMP/TEMP possible
+User clamav
+ScanMail true
+ScanArchive true
+ArchiveBlockEncrypted false
+MaxDirectoryRecursion 15
+FollowDirectorySymlinks false
+FollowFileSymlinks false
+ReadTimeout 180
+#MaxThreads 12
+MaxThreads 24
+MaxConnectionQueueLength 15
+LogSyslog false
+LogRotate true
+LogFacility LOG_LOCAL6
+LogClean false
+LogVerbose false
+PreludeEnable no
+PreludeAnalyzerName ClamAV
+DatabaseDirectory /var/lib/clamav
+OfficialDatabaseOnly false
+SelfCheck 3600
+Foreground false
+Debug false
+ScanPE true
+MaxEmbeddedPE 10M
+ScanOLE2 true
+ScanPDF true
+ScanHTML true
+MaxHTMLNormalize 10M
+MaxHTMLNoTags 2M
+MaxScriptNormalize 5M
+MaxZipTypeRcg 1M
+ScanSWF true
+ExitOnOOM false
+LeaveTemporaryFiles false
+AlgorithmicDetection true
+ScanELF true
+IdleTimeout 30
+CrossFilesystems true
+PhishingSignatures true
+PhishingScanURLs true
+PhishingAlwaysBlockSSLMismatch false
+PhishingAlwaysBlockCloak false
+PartitionIntersection false
+DetectPUA false
+ScanPartialMessages false
+HeuristicScanPrecedence false
+StructuredDataDetection false
+CommandReadTimeout 30
+SendBufTimeout 200
+#MaxQueue 100
+MaxQueue 200
+ExtendedDetectionInfo true
+OLE2BlockMacros false
+AllowAllMatchScan true
+ForceToDisk false
+DisableCertCheck false
+DisableCache false
+MaxScanTime 120000
+MaxScanSize 100M
+MaxFileSize 25M
+MaxRecursion 16
+MaxFiles 10000
+MaxPartitions 50
+MaxIconsPE 100
+PCREMatchLimit 10000
+PCRERecMatchLimit 5000
+PCREMaxFileSize 25M
+ScanXMLDOCS true
+ScanHWP3 true
+MaxRecHWP3 16
+StreamMaxLength 25M
+LogFile /var/log/clamav/clamav.log
+LogTime true
+LogFileUnlock false
+LogFileMaxSize 0
+Bytecode true
+BytecodeSecurity TrustSigned
+BytecodeTimeout 60000
+OnAccessMaxFileSize 5M
+# added for On Access Scan
+# DANGER : do not use / directory as it will lockup the system
+# BUG : https://github.com/Cisco-Talos/clamav/issues/799
+OnAccessPrevention true
+OnAccessExcludeUname clamav
+OnAccessExcludeRootUID true
+OnAccessIncludePath $HOME_DIR
+OnAccessIncludePath /usr/bin
+OnAccessIncludePath /usr/sbin
+OnAccessIncludePath /usr/local/bin
+OnAccessIncludePath /usr/local/sbin
+OnAccessIncludePath /var/log
+OnAccessIncludePath /media
+OnAccessIncludePath /mnt
+OnAccessIncludePath /dev/shm
+OnAccessIncludePath /tmp
+OnAccessIncludePath /root
+OnAccessExcludePath /proc
+OnAccessExcludePath /run
+OnAccessExcludePath /sys
+OnAccessExcludePath /var/run
+OnAccessExcludePath /var/lock
+OnAccessExcludePath /tmp/tracker-extract-1-files.1000
+OnAccessExtraScanning true
+OnAccessMaxThreads 24
+OnAccessCurlTimeout 600
+TemporaryDirectory /var/tmp
+$WEBROOT_INCLUDEPATH
+END
+
+#################################
+# Create clamav-freshclam.service
+#################################
+if [ -f /lib/systemd/system/clamav-freshclam.service ]; then
+        sudo rm /lib/systemd/system/clamav-freshclam.service
+fi
+sudo touch /lib/systemd/system/clamav-freshclam.service
+sudo cat >>/lib/systemd/system/clamav-freshclam.service <<END
+[Unit]
+Description=ClamAV virus database updater
+Documentation=man:freshclam(1) man:freshclam.conf(5) https://docs.clamav.net/
+# If user wants it run from cron, don't start the daemon.
+ConditionPathExists=!/etc/cron.d/clamav-freshclam
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/freshclam -d --foreground=true
+
+[Install]
+WantedBy=multi-user.target
+END
+
+##############################
+# Create clamav-daemon.service
+##############################
+if [ -f /lib/systemd/system/clamav-daemon.service ]; then
+        sudo rm /lib/systemd/system/clamav-daemon.service
+fi
+sudo touch /lib/systemd/system/clamav-daemon.service
+sudo cat >>/lib/systemd/system/clamav-daemon.service <<END
+[Unit]
+Description=Clam AntiVirus userspace daemon
+Documentation=man:clamd(8) man:clamd.conf(5) https://docs.clamav.net/
+# Check for database existence
+ConditionPathExistsGlob=/var/lib/clamav/main.{c[vl]d,inc}
+ConditionPathExistsGlob=/var/lib/clamav/daily.{c[vl]d,inc}
+
+[Service]
+Type=OneShot
+ExecStartPre=/usr/bin/mkdir -p /var/run/clamav
+ExecStartPre=/usr/bin/chown clamav:root /var/run/clamav
+ExecStart=/usr/local/sbin/clamd --foreground=true
+# Reload the database
+ExecReload=/bin/kill -USR2 $MAINPID
+TimeoutStartSec=600
+Restart=on-failure
+RestartSec=40s
+
+[Install]
+WantedBy=multi-user.target
+END
+
+#################################
+# Create clamav-clamonacc.service
+#################################
+if [ -f /lib/systemd/system/clamav-clamonacc.service ]; then
+        sudo rm /lib/systemd/system/clamav-clamonacc.service
+fi
+sudo touch /lib/systemd/system/clamav-clamonacc.service
+sudo cat >>/lib/systemd/system/clamav-clamonacc.service <<END
+[Unit]
+Description=ClamAV On-Access Scanner
+Documentation=man:clamonacc(8) man:clamd.conf(5) https://www.clamav.net/documents
+Requires=clamav-daemon.service
+After=clamav-daemon.service syslog.target network.target
+
+[Service]
+Type=OneShot
+ExecStartPre=/usr/bin/mkdir -p /tmp/tracker-extract-1-files.1000
+ExecStart=/usr/local/sbin/clamonacc --fdpass --config-file=/usr/local/etc/clamd.conf --log=/var/log/clamav/clamonacc.log --move=/tmp/tracker-extract-1-files.1000 --foreground
+ExecStop=/usr/bin/killall --signal KILL /usr/local/sbin/clamonacc
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
+END
+
+####################
+# Create clamav user
+####################
+sudo useradd -U -s /bin/false -d /var/lib/clamav -r clamav
+
+######################
+# Create freshclam.log
+######################
+sudo mkdir -p /var/log/clamav
+sudo touch /var/log/clamav/freshclam.log
+sudo chown clamav:clamav /var/log/clamav/freshclam.log
+sudo chmod o-r /var/log/clamav/freshclam.log
+
+######################
+# Set max_user_watches
+######################
+echo 524288 | sudo tee -a /proc/sys/fs/inotify/max_user_watches
+
+#################
+# Create rc.local
+#################
+if [ -f /etc/rc.local ]; then
+        sudo mv /etc/rc.local /etc/rc.local-backup
+	sudo chmod -x /etc/rc.local-backup
+fi
+sudo touch /etc/rc.local
+sudo cat >>/etc/rc.local <<END
+#!/bin/bash
+
+echo 524288 | sudo tee -a /proc/sys/fs/inotify/max_user_watches
+
+exit 0
+END
+
+#################
+# Make executable
+#################
+sudo chmod +x /etc/rc.local
+
+#####################
+# Download signatures
+#####################
+sudo freshclam
+
+############
+# Last steps
+############
+sudo systemctl daemon-reload
+
+sudo systemctl enable clamav-freshclam.service
+sudo systemctl start clamav-freshclam.service
+sudo systemctl enable clamav-daemon.service
+sudo systemctl start clamav-daemon.service
+sudo systemctl enable clamav-clamonacc.service
+sudo systemctl start clamav-clamonacc.service
+
+sudo chown clamav:clamav /var/log/clamav/clamonacc.log
+# EOF
