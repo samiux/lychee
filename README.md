@@ -51,6 +51,7 @@ nano clamav-installer
 
 Then run the script to install ClamAV On-Access scanning.
 ```
+sudo chmod +x clamav-installer
 sudo ./clamav-installer
 ```
 
