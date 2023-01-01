@@ -18,6 +18,9 @@
 
 . lychee.conf
 
+#######################################
+# Configure webroot path when necessary
+#######################################
 if [[ ! -z "$WEBROOT_PATH" ]]; then
 	WEBROOT_INCLUDEPATH="OnAccessIncludePath $WEBROOT_PATH"
 fi
