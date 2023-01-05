@@ -314,7 +314,7 @@ ConditionPathExistsGlob=/var/lib/clamav/main.{c[vl]d,inc}
 ConditionPathExistsGlob=/var/lib/clamav/daily.{c[vl]d,inc}
 
 [Service]
-Type=OneShot
+Type=simple
 ExecStartPre=/usr/bin/mkdir -p /var/run/clamav
 ExecStartPre=/usr/bin/chown clamav:root /var/run/clamav
 ExecStart=/usr/local/sbin/clamd --foreground=true
@@ -343,8 +343,9 @@ Requires=clamav-daemon.service
 After=clamav-daemon.service syslog.target network.target
 
 [Service]
-Type=OneShot
+Type=simple
 ExecStartPre=/usr/bin/mkdir -p /tmp/tracker-extract-1-files.1000
+ExecStartPre=/bin/bash -c "while [ ! -S /run/clamav/clamd.sock ]; do sleep 1; done"
 ExecStart=/usr/local/sbin/clamonacc --fdpass --config-file=/usr/local/etc/clamd.conf --log=/var/log/clamav/clamonacc.log --move=/tmp/tracker-extract-1-files.1000 --foreground
 ExecStop=/usr/bin/killall --signal KILL /usr/local/sbin/clamonacc
 Restart=on-failure
