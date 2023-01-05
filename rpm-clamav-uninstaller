@@ -13,3 +13,4 @@ sudo rm -R /var/log/clamav
 sudo rm -R /var/lib/clamav
 sudo rm /etc/sysctl.d/60-clamav.conf
 sudo rpm -e clamav
+sudo userdel -r clamav
