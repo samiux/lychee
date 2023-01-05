@@ -11,4 +11,5 @@ sudo systemctl disable clamav-clamonacc.service
 sudo systemctl unmask clamav-clamonacc.service
 sudo rm -R /var/log/clamav
 sudo rm -R /var/lib/clamav
+sudo rm /etc/sysctl.d/60-clamav.conf
 sudo rpm -e clamav

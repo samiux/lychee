@@ -367,31 +367,25 @@ sudo touch /var/log/clamav/freshclam.log
 sudo chown clamav:clamav /var/log/clamav/freshclam.log
 sudo chmod o-r /var/log/clamav/freshclam.log
 
-######################
-# Set max_user_watches
-######################
+###################
+# Set sysctl values
+###################
 echo 524288 | sudo tee -a /proc/sys/fs/inotify/max_user_watches
+echo 1024 | sudo tee -a /proc/sys/fs/inotify/max_user_instances
+echo 2097152 | sudo tee -a /proc/sys/fs/file-max
 
-#################
-# Create rc.local
-#################
-if [ -f /etc/rc.local ]; then
-        sudo mv /etc/rc.local /etc/rc.local-backup
-	sudo chmod -x /etc/rc.local-backup
+#######################
+# Create 60-clamav.conf
+#######################
+if [ -f /etc/sysctl.d/60-clamav.conf ]; then
+        sudo rm /etc/sysctl.d/60-clamav.conf
 fi
-sudo touch /etc/rc.local
-sudo cat >>/etc/rc.local <<END
-#!/bin/bash
-
-echo 524288 | sudo tee -a /proc/sys/fs/inotify/max_user_watches
-
-exit 0
+sudo touch /etc/sysctl.d/60-clamav.conf
+sudo cat >>/etc/sysctl.d/60-clamav.conf <<END
+fs.inotify.max_user_watches=524288
+fs.inotify.max_user_instances=1024
+fs.file-max=2097152
 END
-
-#################
-# Make executable
-#################
-sudo chmod +x /etc/rc.local
 
 #####################
 # Download signatures
