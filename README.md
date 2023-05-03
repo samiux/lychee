@@ -93,6 +93,7 @@ sudo rm -R lychee
 
 ## Test file
 - [Eicar Test File](https://www.eicar.org/download-anti-malware-testfile/)  
+- [AMTSO Security Features Check Tools -- Desktop](https://www.amtso.org/security-features-check/)  
 
 ## Known issues
 - ~~[BUG : /home and it's sub-directories cannot be used in OnAccessIncludePath](https://github.com/Cisco-Talos/clamav/issues/799)~~  
