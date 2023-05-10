@@ -267,6 +267,7 @@ OnAccessExcludePath /run
 OnAccessExcludePath /sys
 OnAccessExcludePath /var/run
 OnAccessExcludePath /var/lock
+OnAccessExcludePath /tmp/snap-private-tmp
 OnAccessExcludePath /tmp/tracker-extract-1-files.1000
 OnAccessExtraScanning true
 OnAccessMaxThreads 24
