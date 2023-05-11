@@ -42,10 +42,12 @@ fi
 ###########################################
 if [[ $LINUX_PACKAGE == "deb" ]]; then
         CLAMAV_PACKAGE="clamav-1.1.0.linux.x86_64.deb"
-elif [[ $LINUX_PACKAGE == "rpm" ]]; then
-        CLAMAV_PACKAGE="clamav-1.1.0.linux.x86_64.rpm"
+#elif [[ $LINUX_PACKAGE == "rpm" ]]; then
+#        CLAMAV_PACKAGE="clamav-1.1.0.linux.x86_64.rpm"
 else
-        CLAMAV_PACKAGE="clamav-1.1.0.linux.x86_64.deb"
+#        CLAMAV_PACKAGE="clamav-1.1.0.linux.x86_64.deb"
+	echo "Please check the lychee.conf where 'LINUX_PACKAGE' should be 'deb'."
+	exit 1
 fi
 
 #####################################
@@ -84,8 +86,8 @@ if [ -f /lib/systemd/system/clamav-freshclam.service ]; then
 	sudo systemctl unmask clamav-clamonacc.service
 	if [[ $LINUX_PACKAGE == "deb" ]]; then
 		sudo dpkg -r clamav
-	else
-		sudo rpm -e clamav
+#	else
+#		sudo rpm -e clamav
 	fi
 fi
 
@@ -95,8 +97,8 @@ fi
 wget https://www.clamav.net/downloads/production/$CLAMAV_PACKAGE
 if [[ $LINUX_PACKAGE == "deb" ]]; then
 	sudo dpkg -i $CLAMAV_PACKAGE
-else
-	sudo rpm -i $CLAMAV_PACKAGE
+#else
+#	sudo rpm -i $CLAMAV_PACKAGE
 fi
 sudo rm $CLAMAV_PACKAGE
 
@@ -267,6 +269,7 @@ OnAccessExcludePath /run
 OnAccessExcludePath /sys
 OnAccessExcludePath /var/run
 OnAccessExcludePath /var/lock
+OnAccessExcludePath /home/$SUDO_USER/snap
 OnAccessExcludePath /tmp/snap-private-tmp
 OnAccessExcludePath /tmp/tracker-extract-1-files.1000
 OnAccessExtraScanning true
