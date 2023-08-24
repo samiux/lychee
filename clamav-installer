@@ -11,8 +11,8 @@
 #
 # Author      : Samiux
 # Website     : https://samiux.github.io
-# Date        : AUG 18, 2023
-# Version     : 0.7
+# Date        : AUG 24, 2023
+# Version     : 0.8
 # License     : GPLv3 (Open Source)
 # Remarks     : This script is only for 6GB or more RAM system
 
@@ -269,7 +269,7 @@ OnAccessExcludePath /run
 OnAccessExcludePath /sys
 OnAccessExcludePath /var/run
 OnAccessExcludePath /var/lock
-OnAccessExcludePath /home/$SUDO_USER/snap
+OnAccessExcludePath $HOME_DIR/snap
 OnAccessExcludePath /tmp/snap-private-tmp
 OnAccessExcludePath /tmp/tracker-extract-1-files.1000
 OnAccessExtraScanning true
