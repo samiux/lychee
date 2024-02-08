@@ -134,7 +134,7 @@ sudo rm -R lychee
 ## Known issues
 - ~~[BUG : /home and it's sub-directories cannot be used in OnAccessIncludePath](https://github.com/Cisco-Talos/clamav/issues/799)~~  
 - ClamAV uses at least 3GB RAM.
-- Non-existent directory will cause high CPU usage.  
+- ~~Non-existent directory will cause high CPU usage.~~  
 - Cannot detect virus on Pen Drive (i.e. external mounted directories).  
 
 ## Reference
